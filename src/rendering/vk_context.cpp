@@ -4,6 +4,10 @@
 #include <mutex>
 #include "rendering/vk_context.hpp"
 
+#if defined(__APPLE__)
+#include <TargetConditionals.h>
+#endif
+
 #include <fstream>
 #include "rendering/vk_utils.hpp"
 #include "core/logger.hpp"
@@ -1785,14 +1789,48 @@ void VkContext::destroyDepthResolveImage() {
     }
 }
 
+namespace {
+// The device reports sample counts per format family, and asking a format that
+// refuses one aborts inside the driver (the iOS simulator advertises 2x and
+// then rejects a 2x depth texture). Ask per format, with the flags the real
+// attachment uses.
+bool samplesUsableFor(VkPhysicalDevice physicalDevice, VkFormat format,
+                      VkImageUsageFlags usage, VkSampleCountFlagBits samples) {
+    if (format == VK_FORMAT_UNDEFINED) return true;
+    VkImageFormatProperties props{};
+    if (vkGetPhysicalDeviceImageFormatProperties(
+            physicalDevice, format, VK_IMAGE_TYPE_2D, VK_IMAGE_TILING_OPTIMAL,
+            usage, samples, &props) != VK_SUCCESS) {
+        return false;
+    }
+    return (props.sampleCounts & samples) != 0;
+}
+}  // namespace
+
 VkSampleCountFlagBits VkContext::getMaxUsableSampleCount() const {
+#if defined(__APPLE__) && TARGET_OS_SIMULATOR
+    // The simulator's Metal driver reports 2x for the depth format and then
+    // refuses to back it, aborting inside Metal when the texture is created.
+    // Nothing in Vulkan surfaces that, so the simulator stays single-sampled.
+    return VK_SAMPLE_COUNT_1_BIT;
+#endif
     VkPhysicalDeviceProperties props;
     vkGetPhysicalDeviceProperties(physicalDevice, &props);
     VkSampleCountFlags counts = props.limits.framebufferColorSampleCounts
                                & props.limits.framebufferDepthSampleCounts;
-    if (counts & VK_SAMPLE_COUNT_8_BIT) return VK_SAMPLE_COUNT_8_BIT;
-    if (counts & VK_SAMPLE_COUNT_4_BIT) return VK_SAMPLE_COUNT_4_BIT;
-    if (counts & VK_SAMPLE_COUNT_2_BIT) return VK_SAMPLE_COUNT_2_BIT;
+    const VkSampleCountFlagBits wanted[] = {
+        VK_SAMPLE_COUNT_8_BIT, VK_SAMPLE_COUNT_4_BIT, VK_SAMPLE_COUNT_2_BIT};
+    for (VkSampleCountFlagBits samples : wanted) {
+        if (!(counts & samples)) continue;
+        if (samplesUsableFor(physicalDevice, depthFormat,
+                             VK_IMAGE_USAGE_DEPTH_STENCIL_ATTACHMENT_BIT |
+                                 VK_IMAGE_USAGE_TRANSFER_SRC_BIT |
+                                 VK_IMAGE_USAGE_SAMPLED_BIT, samples) &&
+            samplesUsableFor(physicalDevice, swapchainFormat,
+                             VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT, samples)) {
+            return samples;
+        }
+    }
     return VK_SAMPLE_COUNT_1_BIT;
 }
 

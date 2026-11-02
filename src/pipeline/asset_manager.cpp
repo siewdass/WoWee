@@ -14,6 +14,10 @@
 
 #include "stb_image.h"
 
+#if defined(__APPLE__)
+#include <TargetConditionals.h>
+#endif
+
 namespace wowee {
 namespace pipeline {
 
@@ -125,6 +129,12 @@ void AssetManager::setupFileCacheBudget() {
     // kills the process rather than swapping when it is passed. A phone with
     // 8 GB was handing this cache 840 MB, which is both more than the app may
     // hold and a good way to be killed the moment it goes to the background.
+    const size_t defaultMaxBudgetBytes = 384ull * 1024ull * 1024ull;
+#elif defined(__APPLE__) && TARGET_OS_IPHONE
+    // Same reasoning as Android, and worse in practice: an iPhone reports half
+    // of its 6 GB as available, so the cache grows past 1 GB while the loading
+    // screen is pulling terrain and textures. The next allocation comes back
+    // null, the worker thread throws bad_alloc and the process aborts mid-load.
     const size_t defaultMaxBudgetBytes = 384ull * 1024ull * 1024ull;
 #else
     const size_t defaultMaxBudgetBytes = 12288ull * 1024ull * 1024ull;  // 12 GB max for file cache

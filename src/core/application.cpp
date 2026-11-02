@@ -1495,7 +1495,7 @@ void Application::run() {
             // queue - its sticks and buttons are sampled once a frame rather
             // than accumulated out of events.
             core::gamepad().handleEvent(event);
-#ifdef __ANDROID__
+#if defined(__ANDROID__) || defined(__ENVIRONMENT_IPHONE_OS_VERSION_MIN_REQUIRED__)
             // The stick and the pinch read the finger events SDL sends
             // alongside the mouse ones. They claim nothing else: every panel,
             // slider and action button keeps working through the mouse SDL
@@ -1527,6 +1527,8 @@ void Application::run() {
                 ui::touchControls().displayChanged();
             }
 
+#endif
+#ifdef __ANDROID__
             // The activity going to the background takes the native window with
             // it, and the Vulkan surface and swapchain built on it die at the
             // same moment. Drawing to them afterwards is what left the client on
@@ -3769,7 +3771,7 @@ void Application::updateInGame(float deltaTime, const char*& updateCheckpoint) {
     };
     inGameStep = "gameHandler update";
     updateCheckpoint = "in_game: gameHandler update";
-#ifdef __ANDROID__
+#if defined(__ANDROID__) || defined(__ENVIRONMENT_IPHONE_OS_VERSION_MIN_REQUIRED__)
     ui::touchControls().update();
     if (renderer && renderer->getCameraController()) {
         auto* cam = renderer->getCameraController();
@@ -4181,7 +4183,7 @@ void Application::render() {
         }
     };
 
-#ifdef __ANDROID__
+#if defined(__ANDROID__) || defined(__ENVIRONMENT_IPHONE_OS_VERSION_MIN_REQUIRED__)
     // Drawn into the background list, under everything the interface puts on
     // screen, and only while a thumb is holding it.
     ui::touchControls().setInWorld(state == AppState::IN_GAME);

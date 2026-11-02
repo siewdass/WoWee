@@ -15,7 +15,12 @@
 // SDLActivity loads libwowee.so and calls SDL_main, the name this header gives
 // main(). SDL2's SDL.h pulled it in; SDL3's does not, and without it the
 // library exports only main and the activity has nothing to call.
-#ifdef __ANDROID__
+//
+// iOS needs it for the same reason: SDL renames this file's main() to SDL_main
+// and supplies the real main() (from SDL_main_impl.h) that runs UIApplicationMain
+// and the app delegate, which is what marks SDL's main thread ready. Without it
+// the process calls SDL_Init with that flag unset and dies in the first frame.
+#if defined(__ANDROID__) || defined(__ENVIRONMENT_IPHONE_OS_VERSION_MIN_REQUIRED__)
 #include <SDL3/SDL_main.h>
 #endif
 #ifdef __APPLE__

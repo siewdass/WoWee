@@ -20,7 +20,11 @@
 // this one answer, because a window opened over memory that is not MAP_JIT
 // calls a JIT API this process was never entitled to use, and that call traps
 // the process rather than returning a failure.
-#if defined(__APPLE__) && !defined(HAVE_UNICORN)
+// iOS is excluded even though it is Apple: MAP_JIT and its write-protect call
+// do not exist there (the call is marked unavailable in the SDK), and an iOS
+// build never maps an executable image anyway.
+#if defined(__APPLE__) && !defined(HAVE_UNICORN) && \
+    !defined(__ENVIRONMENT_IPHONE_OS_VERSION_MIN_REQUIRED__)
     #define WOWEE_MAP_JIT 1
 #endif
 

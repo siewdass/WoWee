@@ -566,8 +566,13 @@ function(compile_shaders TARGET_NAME)
 endfunction()
 
 # StormLib for MPQ extraction tool (not needed for main executable)
-find_library(STORMLIB_LIBRARY NAMES StormLib stormlib storm)
-find_path(STORMLIB_INCLUDE_DIR StormLib.h PATH_SUFFIXES StormLib)
+# Not on iOS: the host copy (Homebrew) would be found through the toolchain's
+# BOTH find mode and linked into an iOS binary that cannot use it, and the
+# MPQ tools are desktop-only anyway.
+if(NOT IOS)
+    find_library(STORMLIB_LIBRARY NAMES StormLib stormlib storm)
+    find_path(STORMLIB_INCLUDE_DIR StormLib.h PATH_SUFFIXES StormLib)
+endif()
 
 # Include ImGui as a static library (Vulkan backend)
 set(IMGUI_DIR ${CMAKE_CURRENT_SOURCE_DIR}/extern/imgui)
@@ -1409,6 +1414,21 @@ if(WIN32)
     # in SDL_main.h, where SDL2 kept it in a separate SDL2main.
     target_link_libraries(wowee PRIVATE ws2_32 winmm crypt32)
 endif()
+if(IOS)
+    # CMake bundles iOS executables automatically but with the desktop plist
+    # template, whose fields CMake leaves empty: the App Store installer and
+    # `simctl install` both reject a bundle without a CFBundleIdentifier or a
+    # UIDeviceFamily. Ship an iOS-shaped template and the identity fields.
+    set_target_properties(wowee PROPERTIES
+        MACOSX_BUNDLE_INFO_PLIST ${CMAKE_CURRENT_SOURCE_DIR}/ios/Info.plist.in
+        MACOSX_BUNDLE_GUI_IDENTIFIER "com.wowee.ios"
+        MACOSX_BUNDLE_BUNDLE_NAME "WoWee"
+        MACOSX_BUNDLE_BUNDLE_VERSION "${PROJECT_VERSION}")
+    # miniaudio pulls in AVFoundation (Objective-C) headers on iOS, so these
+    # translation units must be compiled as Objective-C++.
+    set_source_files_properties(src/audio/audio_engine.cpp
+        src/addons/lua_system_api.cpp PROPERTIES LANGUAGE OBJCXX)
+endif()
 
 # Link ImGui if available
 if(TARGET imgui)
@@ -1602,7 +1622,10 @@ add_custom_command(TARGET wowee POST_BUILD
 
 # Symlink Data/ next to the executable so expansion profiles, opcode tables,
 # and other runtime data files are found when running from the build directory.
-if(NOT WIN32)
+# Not on iOS: the bundle must be self-contained for `simctl install`, which
+# rejects the absolute symlink, and the device reads its sandboxed
+# Documents/Data instead.
+if(NOT WIN32 AND NOT IOS)
     add_custom_command(TARGET wowee POST_BUILD
         COMMAND ${CMAKE_COMMAND} -E create_symlink
             ${CMAKE_CURRENT_SOURCE_DIR}/Data
@@ -1630,11 +1653,13 @@ if(WIN32)
 endif()
 
 # Install targets
+if(NOT IOS)
 install(TARGETS wowee
     RUNTIME DESTINATION bin
     LIBRARY DESTINATION lib
     ARCHIVE DESTINATION lib
 )
+endif()
 
 # Note: tool install rules are placed next to each target definition below.
 
@@ -2034,7 +2059,9 @@ target_link_libraries(dbc_to_csv PRIVATE Threads::Threads)
 set_target_properties(dbc_to_csv PROPERTIES
     RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/bin
 )
+if(NOT IOS)
 install(TARGETS dbc_to_csv RUNTIME DESTINATION bin)
+endif()
 
 # ---- Tool: auth_probe (LOGON_CHALLENGE probe) ----
 add_executable(auth_probe
@@ -2055,7 +2082,9 @@ target_link_libraries(auth_probe PRIVATE Threads::Threads OpenSSL::Crypto
 set_target_properties(auth_probe PROPERTIES
     RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/bin
 )
+if(NOT IOS)
 install(TARGETS auth_probe RUNTIME DESTINATION bin)
+endif()
 
 # ---- Tool: auth_login_probe (challenge + proof probe) ----
 add_executable(auth_login_probe
@@ -2079,7 +2108,9 @@ target_link_libraries(auth_login_probe PRIVATE Threads::Threads OpenSSL::Crypto
 set_target_properties(auth_login_probe PROPERTIES
     RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/bin
 )
+if(NOT IOS)
 install(TARGETS auth_login_probe RUNTIME DESTINATION bin)
+endif()
 
 # ---- Tool: blp_convert (BLP ↔ PNG) ----
 add_executable(blp_convert
@@ -2096,7 +2127,9 @@ target_link_libraries(blp_convert PRIVATE Threads::Threads)
 set_target_properties(blp_convert PROPERTIES
     RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/bin
 )
+if(NOT IOS)
 install(TARGETS blp_convert RUNTIME DESTINATION bin)
+endif()
 
 # ---- Tool: wowee_editor (Standalone World Editor) ----
 # Off the default build: it is a large standalone tool that compiles on every
@@ -2630,7 +2663,9 @@ set_target_properties(wowee_editor PROPERTIES
 if(WOWEE_BUILD_EDITOR)
     # Only installable when it is part of the default build - installing a
     # target excluded from ALL fails at install time on a missing binary.
+    if(NOT IOS)
     install(TARGETS wowee_editor RUNTIME DESTINATION bin)
+    endif()
     message(STATUS "  wowee_editor tool: ENABLED (in default build)")
 else()
     message(STATUS "  wowee_editor tool: on demand only (--target wowee_editor)")

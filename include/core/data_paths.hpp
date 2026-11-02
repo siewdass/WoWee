@@ -47,7 +47,14 @@ inline std::filesystem::path userDataRoot() {
     const char* home = std::getenv("HOME");
     if (home == nullptr || *home == '\0') return {};
 #ifdef __APPLE__
+#if defined(__ENVIRONMENT_IPHONE_OS_VERSION_MIN_REQUIRED__)
+    // iOS apps run in a sandbox: there is no usable ~/Library for user data,
+    // and the standard writable location for data of any size is Documents
+    // inside the app container.
+    return fs::path(home) / "Documents" / "Data";
+#else
     return fs::path(home) / "Library" / "Application Support" / "Wowee" / "Data";
+#endif
 #else
     // The XDG base directory spec, which is what a Linux or BSD desktop expects
     // and what a backup tool knows to pick up.
